@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
  let name = $state('world')
  let show = $state(true)
  export function update() { name = 'Svelte'; show = false }

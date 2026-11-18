@@ -130,14 +130,16 @@ test('native primitives, style reset, attribute casing and removal release resou
 	try {
 		const ascii = document.createElement('asciifont')
 		ascii.setAttribute('text', 'hello')
-		expect((ascii._renderable as ASCIIFontRenderable).text).toBe('hello')
+		expect((ascii._renderable as InstanceType<typeof ASCIIFontRenderable>).text).toBe('hello')
 		const select = document.createElement('select')
 		select.setAttribute('options', [
 			{ name: 'first', description: '' },
 			{ name: 'second', description: '' },
 		])
 		select.setAttribute('selectedindex', 1)
-		expect((select._renderable as SelectRenderable).getSelectedIndex()).toBe(1)
+		expect(
+			(select._renderable as InstanceType<typeof SelectRenderable>).getSelectedIndex()
+		).toBe(1)
 		const node = document.createElement('box')
 		node.style = { paddingLeft: 3 }
 		expect(node._renderable.getPadding(Yoga.Edge.Left).value).toBe(3)
@@ -157,4 +159,71 @@ test('native primitives, style reset, attribute casing and removal release resou
 	} finally {
 		await tui.dispose()
 	}
+})
+
+test('inline subtree removal releases every native placeholder', async () => {
+	const tui = await testRender(Adapter)
+	try {
+		const text = document.createElement('text')
+		const span = document.createElement('span')
+		const value = document.createTextNode('retained')
+		span.append(value)
+		text.append(span)
+		document.body!.append(text)
+		text.remove()
+		await Promise.resolve()
+		expect(text._renderable.isDestroyed).toBe(true)
+		expect(span._renderable.isDestroyed).toBe(true)
+		expect(value._renderable.isDestroyed).toBe(true)
+	} finally {
+		await tui.dispose()
+	}
+})
+
+test('a real mouse click dispatches one delegated click', async () => {
+	const { default: Click } = await import('./fixtures/Click.svelte')
+	const tui = await testRender(Click, { width: 30, height: 5 })
+	try {
+		await tui.renderOnce()
+		await tui.mockMouse.click(1, 0)
+		flushSync()
+		await tui.renderOnce()
+		expect(tui.captureCharFrame()).toContain('Clicks: 1')
+	} finally {
+		await tui.dispose()
+	}
+})
+
+test('actions, spreads, dynamic elements, await blocks and onMount cleanup', async () => {
+	const { default: Features } = await import('./fixtures/Features.svelte')
+	const { tick } = await import('svelte')
+	const { Yoga } = await import('@opentui/core')
+	const records: string[] = []
+	const tui = await testRender(
+		Features,
+		{ width: 50, height: 10 },
+		{ props: { record: (value: string) => records.push(value) } }
+	)
+	try {
+		await tui.renderOnce()
+		expect(tui.captureCharFrame()).toContain('before')
+		expect(tui.captureCharFrame()).toContain('pending')
+		expect(records).toContain('action:before')
+		expect(records).toContain('mount')
+		const node = document.body!.children.find((node) => node.tag === 'div')!
+		expect(node._renderable.getPadding(Yoga.Edge.Left).value).toBe(2)
+		tui.app.update()
+		await tick()
+		flushSync()
+		await tui.renderOnce()
+		expect(tui.captureCharFrame()).toContain('after')
+		expect(tui.captureCharFrame()).toContain('resolved')
+		expect(tui.captureCharFrame()).not.toContain('pending')
+		expect(records).toContain('update:after')
+		expect(node._renderable.getPadding(Yoga.Edge.Left).unit).toBe(Yoga.Unit.Undefined)
+	} finally {
+		await tui.dispose()
+	}
+	expect(records.filter((value) => value === 'action:destroy')).toHaveLength(1)
+	expect(records.filter((value) => value === 'mount:destroy')).toHaveLength(1)
 })

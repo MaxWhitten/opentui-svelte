@@ -1,3 +1,4 @@
+import { addListener, removeListener, clearListeners, dispatch } from './events'
 // Adapted from https://github.com/slowsage/opentui-svelte (MIT).
 import {
 	Renderable,
@@ -124,6 +125,7 @@ const EVENT_TO_CALLBACK: Record<string, string> = {
 	mousedown: 'onMouseDown',
 	mouseup: 'onMouseUp',
 	mousemove: 'onMouseMove',
+	mousedrag: 'onMouseDrag',
 	click: 'onMouse',
 	mouseenter: 'onMouseOver',
 	mouseleave: 'onMouseOut',
@@ -137,6 +139,7 @@ const EVENT_TO_CALLBACK: Record<string, string> = {
 // ============================================================================
 
 let globalRenderer: CliRenderer | null = null
+let pointerDown: TUIElement | null = null
 
 export function getRenderer() {
 	if (!globalRenderer) {
@@ -147,6 +150,7 @@ export function getRenderer() {
 
 export function setRenderer(renderer: CliRenderer | null) {
 	globalRenderer = renderer
+	pointerDown = null
 }
 
 // ============================================================================
@@ -319,10 +323,16 @@ export class TUINode {
 		this.refreshText()
 		// Moving a node is synchronous; release removed native resources after the move window.
 		queueMicrotask(() => {
-			if (!child.parentNode && !child._renderable.isDestroyed)
-				child._renderable.destroyRecursively()
+			if (!child.parentNode) child.destroyDetachedSubtree()
 		})
 		return child
+	}
+
+	private destroyDetachedSubtree() {
+		clearListeners(this)
+		// Inline descendants are logical children, not native layout children.
+		for (const child of this.children) child.destroyDetachedSubtree()
+		if (!this._renderable.isDestroyed) this._renderable.destroyRecursively()
 	}
 
 	before(...nodes: TUINode[]) {
@@ -513,59 +523,22 @@ export class TUIElement extends TUINode {
 		this._setProp(name, undefined)
 	}
 
-	private listeners = new Map<
-		string,
-		Set<{ handler: Function; capture: boolean; once: boolean }>
-	>()
 	addEventListener(
 		event: string,
-		handler: Function,
+		handler: EventListenerOrEventListenerObject | null,
 		options: boolean | AddEventListenerOptions = {}
 	) {
-		const capture = typeof options === 'boolean' ? options : !!options.capture
-		const listeners = this.listeners.get(event) ?? new Set()
-		if ([...listeners].some((entry) => entry.handler === handler && entry.capture === capture))
-			return
-		listeners.add({ handler, capture, once: typeof options !== 'boolean' && !!options.once })
-		this.listeners.set(event, listeners)
+		addListener(this, event, handler, options)
 	}
-
 	removeEventListener(
 		event: string,
-		handler: Function,
+		handler: EventListenerOrEventListenerObject | null,
 		options: boolean | EventListenerOptions = {}
 	) {
-		const capture = typeof options === 'boolean' ? options : !!options.capture
-		for (const entry of this.listeners.get(event) ?? []) {
-			if (entry.handler === handler && entry.capture === capture)
-				this.listeners.get(event)!.delete(entry)
-		}
+		removeListener(this, event, handler, options)
 	}
-
-	dispatchEvent(event: any): boolean {
-		const path: TUINode[] = []
-		for (let node: TUINode | null = this; node; node = node.parentNode) path.push(node)
-		Object.defineProperty(event, 'target', { configurable: true, value: this })
-		event.composedPath = () => path
-		const invoke = (node: TUINode, capture: boolean) => {
-			if (!(node instanceof TUIElement)) return
-			Object.defineProperty(event, 'currentTarget', { configurable: true, value: node })
-			for (const entry of [...(node.listeners.get(event.type) ?? [])]) {
-				if (entry.capture !== capture) continue
-				if (entry.once) node.listeners.get(event.type)!.delete(entry)
-				entry.handler.call(node, event)
-			}
-		}
-		for (const node of [...path].reverse()) {
-			invoke(node, true)
-			if (event.cancelBubble) break
-		}
-		if (!event.cancelBubble)
-			for (const node of path) {
-				invoke(node, false)
-				if (event.cancelBubble || event.bubbles === false) break
-			}
-		return !event.defaultPrevented
+	dispatchEvent(event: Event): boolean {
+		return dispatch(this, event)
 	}
 
 	constructor(renderable: Renderable, tag = '') {
@@ -594,17 +567,24 @@ export class TUIElement extends TUINode {
 			if (detail?.target) {
 				let target: TUINode | null = wrap(detail.target)
 				while (target && !(target instanceof TUIElement)) target = target.parentNode
-				if (target !== this) return
+				if (target !== this) return false
 			}
+			if (type === 'mousedown') pointerDown = detail?.button === 0 ? this : null
 			const event = new Event(type, { bubbles: true, cancelable: true })
 			Object.defineProperty(event, 'detail', { value: detail })
 			if (!this.dispatchEvent(event)) detail?.preventDefault?.()
+			return true
 		}
 		for (const [event, callback] of Object.entries(EVENT_TO_CALLBACK)) {
 			if (event === 'click') continue
 			;(renderable as any)[callback] = (detail: any) => {
-				dispatch(event, detail)
-				if (event === 'mouseup') dispatch('click', detail)
+				const handled = dispatch(event, detail)
+				if (handled && event === 'mousedrag') pointerDown = null
+				if (handled && event === 'mouseup') {
+					const clicked = pointerDown === this && detail?.button === 0
+					pointerDown = null
+					if (clicked) dispatch('click', detail)
+				}
 			}
 		}
 		for (const event of [
