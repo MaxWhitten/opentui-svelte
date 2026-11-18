@@ -254,7 +254,9 @@ export class TUINode {
 	set nodeValue(value: string | null) {
 		if (this._renderable instanceof TextRenderable && value !== null) {
 			;(this._renderable as TextRenderable).content = value
-			this._renderable.visible = value.length !== 0
+			// Formatting whitespace between terminal elements is not a flex item.
+			// Inline text is composed separately by refreshText, including its spaces.
+			this._renderable.visible = this.tag === '#text' ? /\S/.test(value) : value.length !== 0
 			this.refreshText()
 		}
 	}
@@ -832,7 +834,7 @@ class TUIDocument {
 	createTextNode(text: string | number): TUINode {
 		return this._create(TextRenderable, '#text', {
 			content: String(text),
-			visible: String(text).length !== 0,
+			visible: /\S/.test(String(text)),
 		})
 	}
 

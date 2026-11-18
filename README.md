@@ -58,6 +58,8 @@ Only one root may be active at a time; await `dispose()` before mounting another
 
 Native tags: `box`, `text`, `input`, `textarea`, `scrollbox`, `select`, `tabselect`, `asciifont`, `code`, `diff`. HTML layout aliases (`div`, `section`, `main`, etc.) remain supported. Inside `text`, `span`, `b`/`strong`, `i`/`em`, `u`, `a`, and `br` compose inline styled text. Use `content` for code/diff content. Use `options` for select choices. Svelte tag names cannot contain underscores.
 
+Whitespace-only text nodes between layout elements do not occupy flex space. Use layout properties such as `gap` or `margin` for spacing between renderables; whitespace inside a `text` element remains part of its content. Reactive text outside `text` enters or leaves layout as it becomes nonblank or blank.
+
 Properties use OpenTUI names, including camelCase attributes; lowercase compiler output is normalized against native setters. Object-valued options stay objects. `focused` focuses/blurs the native node. `style` objects apply native properties and remove stale keys; CSS strings/stylesheets are not supported. Unknown tags throw with registration guidance.
 
 Svelte event attributes (`onmousedown`, `onclick`, `oninput`, etc.) use the adapter's event propagation. The wrapper is `event.target`; the original OpenTUI payload is `event.detail`. Native input/change events support `bind:value`. Prefer `useKeyboard` for the full typed keyboard event. Event compatibility is deliberately narrower than a browser (see PARITY.md).

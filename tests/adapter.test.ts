@@ -111,6 +111,35 @@ test('rich text preserves inline spacing, styles and reactive branches', async (
 	}
 })
 
+test('formatting whitespace does not take layout space and reactive text remains visible', async () => {
+	const { default: Whitespace } = await import('./fixtures/Whitespace.svelte')
+	const tui = await testRender(Whitespace, { width: 40, height: 10 })
+	try {
+		await tui.renderOnce()
+		let lines = tui.captureCharFrame().split('\n')
+		expect(lines[0]).toContain('first')
+		expect(lines[1]).toContain('second')
+		expect(lines[2]).toMatch(/^A B/)
+		expect(lines[3]).toContain('inline bold text')
+		tui.app.update('live')
+		tui.app.updateSeparator('  ')
+		flushSync()
+		await tui.renderOnce()
+		lines = tui.captureCharFrame().split('\n')
+		expect(lines[1]).toContain('live')
+		expect(lines[2]).toContain('second')
+		expect(lines[4]).toContain('inline bold  text')
+		tui.app.update(' \t\n')
+		flushSync()
+		await tui.renderOnce()
+		lines = tui.captureCharFrame().split('\n')
+		expect(lines[1]).toContain('second')
+		expect(lines[2]).toMatch(/^A B/)
+	} finally {
+		await tui.dispose()
+	}
+})
+
 test('a failed initial effect releases the root and component resources', async () => {
 	const { default: Failure } = await import('./fixtures/Failure.svelte')
 	let cleaned = 0
