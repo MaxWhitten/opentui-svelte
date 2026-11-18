@@ -1,4 +1,4 @@
-export {}
+import sveltePlugin from '../src/svelte-plugin'
 const result = await Bun.build({
 	entrypoints: [
 		'src/index.ts',
@@ -9,6 +9,7 @@ const result = await Bun.build({
 		'src/svelte-plugin.ts',
 	],
 	target: 'bun',
+	plugins: [sveltePlugin],
 	packages: 'external',
 	outdir: 'dist',
 	splitting: true,

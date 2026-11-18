@@ -1,3 +1,4 @@
+import { useSubscription } from './lifecycle.svelte'
 import { getRenderer } from './dom'
 import type { KeyEvent } from '@opentui/core'
 
@@ -6,19 +7,8 @@ export interface UseKeyboardOptions {
 	release?: boolean
 }
 
-/**
- * Subscribe to keyboard events in an OpenTUI Svelte app.
- *
- * Call inside a `$effect` so cleanup runs when the component is destroyed:
- *
- * ```svelte
- * $effect(() => {
- *     const cleanup = useKeyboard((key) => {
- *         if (key.name === 'tab') { ... }
- *     })
- *     return cleanup
- * })
- * ```
+/** Subscribe during component initialization; Svelte automatically removes listeners on teardown.
+ * Also supports existing $effect callers and an optional explicit unsubscribe.
  */
 export function useKeyboard(
 	handler: (key: KeyEvent) => void,
@@ -28,15 +18,17 @@ export function useKeyboard(
 	const keyInput = renderer.keyInput
 	const release = options.release
 
-	keyInput.on('keypress', handler)
-	if (release) {
-		keyInput.on('keyrelease', handler)
-	}
-
-	return () => {
-		keyInput.off('keypress', handler)
+	return useSubscription(() => {
+		keyInput.on('keypress', handler)
 		if (release) {
-			keyInput.off('keyrelease', handler)
+			keyInput.on('keyrelease', handler)
 		}
-	}
+
+		return () => {
+			keyInput.off('keypress', handler)
+			if (release) {
+				keyInput.off('keyrelease', handler)
+			}
+		}
+	})
 }

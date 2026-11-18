@@ -47,7 +47,7 @@ Run with `bun --conditions=browser src/main.ts`. The browser condition selects S
 - `render(Component, rendererConfig?, { props?, context? }?)` returns `{ renderer, root, app, dispose }`. `app` contains component exports.
 - `testRender(Component, testOptions?, mountOptions?)` returns OpenTUI's test helpers, component exports, and an awaitable `dispose()` that unmounts Svelte before disposing native resources.
 - `useRenderer()` returns the active renderer.
-- `useKeyboard(handler, { release? })`, `usePaste(handler)`, and `onResize(handler)` return unsubscribe functions. Use `$effect(() => useKeyboard(handler))` so Svelte owns cleanup.
+- `useKeyboard(handler, { release? })`, `usePaste(handler)`, and `onResize(handler)` are lifecycle-managed hooks. Call them directly during component initialization; they subscribe after mount and automatically unsubscribe when the component is removed. They still return an optional cancellation function and support existing `$effect(() => useKeyboard(handler))` callers. Do not call them outside a Svelte component/effect.
 - `useTerminalDimensions()` returns a Svelte readable store of `{ width, height }`.
 - `extend({ custombox: CustomRenderable })` registers a lowercase terminal tag. Constructors receive `(renderer, { id })`; subsequent props are applied through public setters. Constructor-only options need a custom wrapper.
 - `getComponentCatalogue()` returns a copy of the registry.

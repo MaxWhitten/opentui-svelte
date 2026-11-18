@@ -1,25 +1,30 @@
+import { useSubscription } from './lifecycle.svelte'
 import { readable } from 'svelte/store'
 import type { PasteEvent } from '@opentui/core'
 import { getRenderer } from './dom'
 
 export const useRenderer = getRenderer
 
-/** Call in a Svelte $effect and return the unsubscribe function. */
+/** Call during component initialization; listeners are removed automatically on teardown. */
 export function usePaste(handler: (event: PasteEvent) => void): () => void {
 	const input = getRenderer().keyInput
-	input.on('paste', handler)
-	return () => {
-		input.off('paste', handler)
-	}
+	return useSubscription(() => {
+		input.on('paste', handler)
+		return () => {
+			input.off('paste', handler)
+		}
+	})
 }
 
-/** Call in a Svelte $effect and return the unsubscribe function. */
+/** Call during component initialization; listeners are removed automatically on teardown. */
 export function onResize(handler: (width: number, height: number) => void): () => void {
 	const renderer = getRenderer()
-	renderer.on('resize', handler)
-	return () => {
-		renderer.off('resize', handler)
-	}
+	return useSubscription(() => {
+		renderer.on('resize', handler)
+		return () => {
+			renderer.off('resize', handler)
+		}
+	})
 }
 
 /** A Svelte store; $dimensions subscriptions are disposed by Svelte. */

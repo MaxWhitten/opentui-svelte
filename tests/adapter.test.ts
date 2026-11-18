@@ -227,3 +227,60 @@ test('actions, spreads, dynamic elements, await blocks and onMount cleanup', asy
 	expect(records.filter((value) => value === 'action:destroy')).toHaveLength(1)
 	expect(records.filter((value) => value === 'mount:destroy')).toHaveLength(1)
 })
+
+test('hooks own subscriptions across component removal and remount', async () => {
+	const { default: Hooks } = await import('./fixtures/Hooks.svelte')
+	const { PasteEvent } = await import('@opentui/core')
+	const records: string[] = []
+	const tui = await testRender(
+		Hooks,
+		{},
+		{ props: { record: (event: string) => records.push(event) } }
+	)
+	const input = tui.renderer.keyInput
+	const counts = () => [
+		input.listenerCount('keypress'),
+		input.listenerCount('keyrelease'),
+		input.listenerCount('paste'),
+		tui.renderer.listenerCount('resize'),
+	]
+	const fire = () => {
+		tui.mockInput.pressTab()
+		input.emit('paste', new PasteEvent(new Uint8Array()))
+		tui.renderer.emit('resize', 40, 10)
+	}
+	try {
+		const mounted = counts()
+		fire()
+		expect(records).toEqual(['key', 'paste', 'resize'])
+		tui.app.toggle()
+		flushSync()
+		expect(counts()).toEqual(mounted.map((count) => count - 1))
+		fire()
+		expect(records).toHaveLength(3)
+		tui.app.toggle()
+		flushSync()
+		expect(counts()).toEqual(mounted)
+		fire()
+		expect(records).toEqual(['key', 'paste', 'resize', 'key', 'paste', 'resize'])
+	} finally {
+		await tui.dispose()
+	}
+})
+
+test('hooks may be cancelled before their mount effect runs', async () => {
+	const { default: Hooks } = await import('./fixtures/Hooks.svelte')
+	const records: string[] = []
+	const tui = await testRender(
+		Hooks,
+		{},
+		{ props: { record: (event: string) => records.push(event), cancelImmediately: true } }
+	)
+	try {
+		tui.mockInput.pressTab()
+		tui.renderer.emit('resize', 40, 10)
+		expect(records).toEqual([])
+	} finally {
+		await tui.dispose()
+	}
+})

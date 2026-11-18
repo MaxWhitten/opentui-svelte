@@ -35,3 +35,9 @@ Reviewed against upstream `358902a` and the public React/Solid integration contr
 8. **Upstream status:** adoption, ownership of the official package scope, maintainer review, and ongoing maintenance are organizational requirements. This fork cannot confer first-party status itself.
 
 The fork is a tested improvement, not a declaration that the above blockers are solved. Regression tests should accompany each further claim of compatibility.
+
+## Consumer simplification
+
+The vscan consumer imports this package and its preload/build plugin directly; no local adapter forwarding library is needed. Its ASCII-font wrapper is replaced by the native `asciifont` element. Keyboard, paste, and resize hooks now own their Svelte subscriptions, matching the lifecycle behavior expected from React/Solid hooks. Tests cover component removal/remount, explicit cancellation, and legacy effect callers. The adapter build compiles its internal rune module too.
+
+The remaining vscan Button is application styling/composition using `box` and `text`, not a native renderer workaround. Neither documented React nor Solid intrinsic catalogue includes a button primitive. Tab order remains application policy, as in React's login example; system-information shell commands likewise remain application code. No unrelated native features were added merely to remove these app-specific components.
