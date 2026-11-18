@@ -284,3 +284,27 @@ test('hooks may be cancelled before their mount effect runs', async () => {
 		await tui.dispose()
 	}
 })
+
+test('selection controls bridge native keyboard changes and activation to Svelte events', async () => {
+	const { default: Selection } = await import('./fixtures/Selection.svelte')
+	const records: Array<[string, unknown]> = []
+	const tui = await testRender(Selection, { width: 40, height: 10 }, {
+		props: { record: (kind: string, detail: unknown) => records.push([kind, detail]) },
+	})
+	const option = { name: 'second', description: '' }
+	try {
+		await tui.renderOnce()
+		tui.mockInput.pressArrow('down')
+		tui.mockInput.pressEnter()
+		expect(records).toEqual([['change', [1, option]], ['select', [1, option]]])
+		records.length = 0
+		tui.app.toggle()
+		flushSync()
+		await tui.renderOnce()
+		tui.mockInput.pressArrow('right')
+		tui.mockInput.pressEnter()
+		expect(records).toEqual([['change', [1, option]], ['select', [1, option]]])
+	} finally {
+		await tui.dispose()
+	}
+})

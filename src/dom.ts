@@ -600,6 +600,10 @@ export class TUIElement extends TUINode {
 			)
 		if (renderable instanceof InputRenderable)
 			renderable.on('enter', (value) => dispatch('submit', value))
+		if (renderable instanceof SelectRenderable || renderable instanceof TabSelectRenderable) {
+			renderable.on('selectionChanged', (index, option) => dispatch('change', [index, option]))
+			renderable.on('itemSelected', (index, option) => dispatch('select', [index, option]))
+		}
 	}
 
 	focus() {

@@ -3,6 +3,8 @@ import type {
 	BoxOptions,
 	ScrollBoxOptions,
 	ASCIIFontOptions,
+	SelectRenderableOptions,
+	TabSelectOption,
 	TabSelectRenderableOptions,
 } from '@opentui/core'
 
@@ -11,12 +13,25 @@ export type TerminalProps<Options> = Omit<HTMLAttributes<HTMLElement>, keyof Opt
 	Partial<Options> &
 	LowercaseProps<Options> & { focused?: boolean; style?: Partial<Options> }
 
+/** Native selection events carry OpenTUI's index and option in detail. */
+export type SelectionEvent<Option> = Event & { readonly detail: [index: number, option: Option | null] }
+export type TabSelectProps = Omit<TerminalProps<TabSelectRenderableOptions>, 'onchange' | 'onselect'> & {
+	onchange?: (event: SelectionEvent<TabSelectOption>) => void
+	onselect?: (event: SelectionEvent<TabSelectOption>) => void
+}
+
 declare module 'svelte/elements' {
+	// Svelte already defines the HTML select tag; augment only its native-only props.
+	interface HTMLSelectAttributes {
+		options?: SelectRenderableOptions['options']
+		selectedIndex?: number
+		selectedindex?: number
+	}
 	interface SvelteHTMLElements {
 		box: TerminalProps<BoxOptions>
 		scrollbox: TerminalProps<ScrollBoxOptions>
 		asciifont: TerminalProps<ASCIIFontOptions>
-		tabselect: TerminalProps<TabSelectRenderableOptions>
+		tabselect: TabSelectProps
 	}
 }
 
