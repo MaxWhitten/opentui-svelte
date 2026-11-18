@@ -1,4 +1,4 @@
-# @opentui/svelte
+# OpenTUI Svelte
 
 > **Disclaimer — please do not use this fork.**
 >
@@ -6,83 +6,81 @@
 >
 > I recommend that nobody use this fork. It is an AI-generated experiment, not a trustworthy or production-ready integration. Passing tests does not change that recommendation.
 
-OpenTUI integration for Svelte 5 using DOM shims (DOM-Only approach).
+An experimental fork of [slowsage/opentui-svelte](https://github.com/slowsage/opentui-svelte), with Svelte 5 runtime tests and native OpenTUI integration. This is an independent adapter, not an official OpenTUI package. See [PARITY.md](PARITY.md) for the remaining adoption blockers.
 
-## Status
+## Run
 
-✅ **Working** - Implementation complete (571 lines)
+This source package targets Bun. The tested combination is Bun 1.4.4, Svelte 5.57.3, and OpenTUI 0.9.2. The peer versions are intentionally exact: Svelte's generated DOM operations and OpenTUI's native ownership contracts need regression testing before upgrades.
 
-- DOM API shimming: 60 operations
-- Real Svelte 5 runtime + OpenTUI rendering layer
-- Reactive state, effects, and component composition
+Install the fork from GitHub or a local directory, then add:
 
-## Quick Start
-
-**Run a Svelte component:**
-
-```bash
-cd packages/svelte
-bun --conditions=browser examples/hello-svelte.svelte
+```toml
+# bunfig.toml
+preload = ["@maxwhitten/opentui-svelte/preload"]
 ```
 
-**⚠️ Critical**: Must use `--conditions=browser` flag (Svelte 5 requirement)
+```ts
+import { render } from '@maxwhitten/opentui-svelte'
+import App from './App.svelte'
 
-## How It Works
+const app = await render(App, { exitOnCtrlC: true }, { props: { name: 'World' } })
+// await app.dispose() when finished; disposal is awaitable and idempotent.
+```
 
-1. **Bun Plugin**: Automatically compiles `.svelte` files (via bunfig.toml preload)
-2. **Svelte Compiler**: Generates standard Svelte 5 runtime code
-3. **DOM Shims**: `installDOMShims()` replaces global DOM APIs with OpenTUI wrappers
-4. **Runtime**: Svelte calls DOM → Our shims → OpenTUI Renderables
-
-## Example
-
-**hello-svelte.svelte:**
+Run with `bun --conditions=browser src/main.ts`. The browser condition selects Svelte's client runtime; this is still a terminal program. Importing the package does not install globals until render/testRender is called. Installation refuses to replace an existing browser document.
 
 ```svelte
-<script>
-  let name = 'World';
-  let count = $state(0);
-
-  setInterval(() => {
-    count += 1;
-  }, 1000);
+<script lang="ts">
+  let { name }: { name: string } = $props()
+  let value = $state('')
 </script>
 
-<div>
-  <div>Hello {name}!</div>
-  <div>Count: {count}</div>
-</div>
+<box flexDirection="column">
+  <text>Hello <b>{name}</b>!</text>
+  <input bind:value focused />
+  <text>{value}</text>
+</box>
 ```
 
-**Run:**
+## API
 
-```bash
-bun --conditions=browser examples/hello-svelte.svelte
-```
+- `render(Component, rendererConfig?, { props?, context? }?)` returns `{ renderer, root, app, dispose }`. `app` contains component exports.
+- `testRender(Component, testOptions?, mountOptions?)` returns OpenTUI's test helpers, component exports, and an awaitable `dispose()` that unmounts Svelte before disposing native resources.
+- `useRenderer()` returns the active renderer.
+- `useKeyboard(handler, { release? })`, `usePaste(handler)`, and `onResize(handler)` are lifecycle-managed hooks. Call them directly during component initialization; they subscribe after mount and automatically unsubscribe when the component is removed. They still return an optional cancellation function and support existing `$effect(() => useKeyboard(handler))` callers. Do not call them outside a Svelte component/effect.
+- `useTerminalDimensions()` returns a Svelte readable store of `{ width, height }`.
+- `extend({ custombox: CustomRenderable })` registers a lowercase terminal tag. Constructors receive `(renderer, { id })`; subsequent props are applied through public setters. Constructor-only options need a custom wrapper.
+- `getComponentCatalogue()` returns a copy of the registry.
 
-## Implementation
+Only one root may be active at a time; await `dispose()` before mounting another. Attempting overlapping roots throws rather than assigning nodes to the wrong native scene. Svelte templates survive sequential remounts.
 
-- **src/dom.ts** (489 lines): TUINode, TUIElement, TUIDocument classes
-- **index.ts** (82 lines): render(), testRender(), installDOMShims()
-- **scripts/svelte-plugin.ts**: Bun plugin for .svelte compilation
-- **scripts/preload.ts**: Plugin registration (loaded via bunfig.toml)
+## Elements and events
 
-## Programmatic API
+Native tags: `box`, `text`, `input`, `textarea`, `scrollbox`, `select`, `tabselect`, `asciifont`, `code`, `diff`. HTML layout aliases (`div`, `section`, `main`, etc.) remain supported. Inside `text`, `span`, `b`/`strong`, `i`/`em`, `u`, `a`, and `br` compose inline styled text. Use `content` for code/diff content. Use `options` for select choices. Svelte tag names cannot contain underscores.
 
-```typescript
-import { render } from "@opentui/svelte"
-import MyComponent from "./MyComponent.svelte"
+Whitespace-only text nodes between layout elements do not occupy flex space. Use layout properties such as `gap` or `margin` for spacing between renderables; whitespace inside a `text` element remains part of its content. Reactive text outside `text` enters or leaves layout as it becomes nonblank or blank.
 
-await render(MyComponent, {
-  exitOnCtrlC: true,
-  targetFps: 30,
+Properties use OpenTUI names, including camelCase attributes; lowercase compiler output is normalized against native setters. Object-valued options stay objects. `focused` focuses/blurs the native node. `style` objects apply native properties and remove stale keys; CSS strings/stylesheets are not supported. Unknown tags throw with registration guidance.
+
+Svelte event attributes (`onmousedown`, `onclick`, `oninput`, etc.) use the adapter's event propagation. The wrapper is `event.target`; the original OpenTUI payload is `event.detail`. Native input/change events support `bind:value`. Prefer `useKeyboard` for the full typed keyboard event. Event compatibility is deliberately narrower than a browser (see PARITY.md).
+
+For `select` and `tabselect`, `onchange` reports selection movement and `onselect` reports activation, with `[index, option]` in `event.detail`. These are Svelte events, not React/Solid's positional callback arguments. The original `selectionChanged` and `itemSelected` native event bridges remain available. `tabselect` handlers have typed details; Svelte's built-in HTML `select` event types do not yet describe native details.
+
+`bind:this` exposes a wrapper, whose `_renderable` is the underlying OpenTUI node. Its focus/blur, bounding rectangle, and scrollbox `scroll({ top, left })` methods use native state. DOM rectangles are terminal cells, not pixels.
+
+For opt-in types for new terminal tags, add `@maxwhitten/opentui-svelte/elements` to TypeScript `types`. Common terminal layout/color/focus attributes are also added to HTML/SVG tags, including lowercase attribute spellings generated by Svelte. Native `select` options and selected index are augmented on Svelte's HTML select type. Type fixtures are checked by `svelte-check`; specialized native input/selection typing remains incomplete. This opt-in augmentation is intended for terminal projects, not mixed browser/terminal applications.
+
+## Build and test
+
+```ts
+import sveltePlugin from '@maxwhitten/opentui-svelte/bun-plugin'
+const result = await Bun.build({
+  entrypoints: ['src/main.ts'], target: 'bun', packages: 'external',
+  outdir: 'dist', plugins: [sveltePlugin],
 })
+if (!result.success) throw new AggregateError(result.logs)
 ```
 
-## Files
+The plugin supports `.svelte`, `.svelte.js`, and `.svelte.ts`, preserves inline source maps, and surfaces compiler warnings (except browser accessibility diagnostics). It does not auto-render entrypoints based on guessed component names.
 
-- `examples/` - Working examples (hello-svelte.svelte, child.svelte, counter.svelte)
-- `src/dom.ts` - DOM API implementations
-- `index.ts` - Public API
-- `scripts/` - Build and compilation tooling
-- `analysis/` - Implementation analysis (DOM-Only approach chosen)
+From this package: `bun run test`, `bun run typecheck`, `bun run check:svelte`, `bun run build`. Consumers also need the browser condition when running built code. Raw `bun test` selects Svelte's server entrypoint; use the test script.

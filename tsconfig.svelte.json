@@ -1,0 +1,6 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": { "types": ["bun", "svelte", "./src/elements"] },
+	"include": ["src/**/*.ts", "tests/**/*.ts", "tests/**/*.svelte"],
+	"exclude": ["node_modules", "dist"]
+}
